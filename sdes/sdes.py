@@ -271,6 +271,22 @@ class LinearSDE(SDE):
         """
         Gradient of the log transition density of Y_t | X_s, where Y_t | X_t \sim N(0, \eta^2)
         """
+        # When implementing a Girsanov integral:
+
+        # s (num+1, )
+        # t: float ()
+        # x_s: (N, num+1)
+        # y_1: float 
+        # eta_eq: float
+
+        # When simulating:
+
+        # s: float
+        # t: float
+        # x_s: (N, )
+        # y_t: float
+        # eta_sq: float
+
         return grad_log_linear_gaussian(x_s, y_t, self._a(s, t), self._b(s, t), self._v(s, t) + eta_sq)
     
     def exact_simulate(self, size: int, x_0, x_start, t_start: float = 0., t_end: float = 1., num=5) -> np.ndarray:
@@ -281,6 +297,11 @@ class LinearSDE(SDE):
         exact_scheme = LinearExact(self)
         return exact_scheme.simulate(size=size, t_start=t_start, t_end=t_end, x_start=x_start, num=num)
 
+    # def _stack_params(self, num):
+    #     """
+    #     The parameters of a linear SDE are set to vectors in particle filters, as in general they 
+    #     depend on the starting point. This utility function 
+    #     """
 
 class TimeLinearSDE(LinearSDE):
     """
@@ -406,6 +427,37 @@ class SinDiffusion(SDE):
 
     def sigma(self, t, x):
         return self.theta_2
+
+class ManualOptOU(SDE):
+    """
+    Manual implementation of the optimal proposal for the 1D OU SDE.
+    """
+    default_params = {'rho': 0.2,
+                    'mu': 0.,
+                    'phi': 1.,
+                    'y': 1.,
+                    'eta': 0.01,
+                    'T': 1.
+                    }
+    
+    def b(self, t, x):
+        return -self.rho * x + (self.phi ** 2) * self.grad_log_py(t, x)
+
+    def sigma(self, t, x):
+        return self.phi
+
+    def A(self, t):
+        return np.exp(-self.rho*t)
+
+    def B(self, t):
+        return 0.
+    
+    def C(self, t):
+        return (self.phi ** 2)/(2*self.rho) * (1 - np.exp(-2*self.rho*t))
+    
+    def grad_log_py(self, t, x):
+        return self.A(self.T-t) * (self.y - self.A(self.T-t)*x - self.B(self.T-t))/(self.C(self.T-t) + self.eta ** 2)
+    
 
 # Multivariate SDEs:
 

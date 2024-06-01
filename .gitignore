@@ -1,0 +1,5 @@
+# PyCache
+*.pyc
+#ipynb checkpoints
+/notebooks/.ipynb_checkpoints
+/notebooks/deprecated

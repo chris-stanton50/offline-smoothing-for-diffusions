@@ -68,6 +68,7 @@ class ForwardProposal(SDE):
         """
         step = float(X.dtype.names[0])
         X_array = start_points_paths_to_array(x_start, X)
+        # print(f'X_array shape: {X_array.shape}')
         b_1 = self._b_time_shifted; b_2 = self.b; Cov = self.Cov
         log_girsanov_wgts = log_girsanov(X_array, b_1, b_2, Cov, step)
         return log_girsanov_wgts
