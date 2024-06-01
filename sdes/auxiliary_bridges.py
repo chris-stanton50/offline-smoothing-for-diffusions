@@ -68,7 +68,6 @@ class ForwardProposal(SDE):
         """
         step = float(X.dtype.names[0])
         X_array = start_points_paths_to_array(x_start, X)
-        # print(f'X_array shape: {X_array.shape}')
         b_1 = self._b_time_shifted; b_2 = self.b; Cov = self.Cov
         log_girsanov_wgts = log_girsanov(X_array, b_1, b_2, Cov, step)
         return log_girsanov_wgts
@@ -163,7 +162,7 @@ class AuxiliaryBridge(SDE):
     likelihood can be evaluated up to discretisation (i.e all the terms inside the path integrals
     are tractable). 
     """
-    def __init__(self, sde, x_end, t_start, t_end):
+    def __init__(self, sde, t_start, t_end, x_end):
         self.SDE = sde
         self.x_end = x_end
         self.t_start = t_start
@@ -185,12 +184,15 @@ class AuxiliaryBridge(SDE):
         raise NotImplementedError(self._error_msg('b'))
     
     def sigma(self, t, x):
-        raise NotImplementedError(self._error_msg('sigma'))
+        return self.SDE.sigma(self.t_start + t, x)
+    
+    def _b_time_shifted(self, t, x):
+        return self.SDE.b(self.t_start + t, x)
 
     def bridge_log_likelihood(self, x_start, X):
         raise NotImplementedError(self._error_msg('bridge_log_likelihood'))
     
-    def simulate(self, size=1, x_start=None, num=5):
+    def simulate(self, size, x_start, num=5):
         if size != self.x_end_dim and self.x_end_dim > 1:
             raise ValueError(f'Simulation size {size} should match dimension of end point vector ({self.x_end_dim}), unless a single end point is specified.')
         simulation = super().simulate(size, t_start=0., t_end=self.t_diff, x_start=x_start, num=num)
@@ -239,29 +241,6 @@ class DelyonHuBridge(AuxiliaryBridge):
     #     dt_integral = dt_integral.sum(axis=1)
     #     return dX_integral - 0.5 * dt_integral        
 
-
-# def log_girsanov(X, target_sde, proposal_sde):
-#     """
-#     First stab at building a function to calculate weights according to Girsanov's formula.
-#     Proposal and target SDEs must be univariate, and must have the same diffusion coefficient. 
-#     Move this into your practical implementation in the future.
-
-#     The log Girsanov weight is given by:
-
-#     $$ \int_{0}^T (b_2(X_t) - b_1(X_t))/\sigma(X_t) dX_t - 0.5 \int_{0}^T (b_2^2(X_t) - b_1^2(X_t))/\sigma(X_t)dt $$
-#     """
-#     array_X = struct_array_to_array(X).T
-#     names = X.dtype.names; delta = float(names[1]) - float(names[0])
-#     times = np.array([float(name) for name in names])
-#     b_1 = proposal_sde.b; b_2 = target_sde.b; sigma = target_sde.sigma
-#     B_1 = b_1(times, array_X)[:, :-1]
-#     B_2 = b_2(times, array_X)[:, :-1] 
-#     Sigma = sigma(times, array_X)[:, :-1]
-#     dX_integral = (B_2 - B_1) * (array_X[:, 1:] - array_X[:, :-1]) / Sigma
-#     dt_integral = delta*(np.square(B_2) - np.square(B_1))/Sigma
-#     dX_integral = dX_integral.sum(axis=1)
-#     dt_integral = dt_integral.sum(axis=1)
-#     return dX_integral - 0.5 * dt_integral
 
 class VanDerMeulenSchauerBridge(AuxiliaryBridge):
     pass     
