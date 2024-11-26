@@ -11,7 +11,7 @@ Use of this class is necessary to build the distribution objects for multivariat
 """
 
 
-from particles.distributions import MvNormal
+from particles.distributions import MvNormal, VaryingCovNormal
 import numpy as np
 import numpy.linalg as nla
 from scipy import stats
@@ -36,7 +36,7 @@ class VaryingCovNormal(MvNormal):
     `MvNormal`.
     """
     def __init__(self, loc=0., cov=None):
-        self.loc = loc
+        self.loc = loc # expecting (d, ) array
         self.cov = cov
         err_msg = 'VaryingCovNormal: argument cov must be a (N, d, d) array, \
                 with d>1; cov[n, :, :] must be symmetric and positive'
@@ -48,21 +48,22 @@ class VaryingCovNormal(MvNormal):
         assert d1 == d2, err_msg
 
     def linear_transform(self, z):
-        return self.loc + np.einsum("...ij,...j", self.L, z)
+        return self.loc + np.einsum("...ij,...j", self.L, z) # loc is broadcasted to be (N, d) here.
 
     def rvs(self, size=None):
         N = self.N if size is None else size
         z = stats.norm.rvs(size=(N, self.dim))
         return self.linear_transform(z)
 
-    def logpdf(self, x):
+    def logpdf(self, x): # expecting (N, d) array input. Does not work with (d, ) array.
         halflogdetcov = np.sum(np.log(np.diagonal(self.L, axis1=1, axis2=2)),
                                axis=1)
         # not as efficient as triangular_solve, but numpy does not have
         # a "tensor" version of triangular_solve
-        z = nla.solve(self.L, x - self.loc)
+        z = nla.solve(self.L, x - self.loc) # (N, d, d) and (N, d)
         norm_cst = self.dim * HALFLOG2PI + halflogdetcov
         return - 0.5 * np.sum(z * z, axis=1) - norm_cst
 
     def posterior(self, x, Sigma=None):
         raise NotImplementedError
+

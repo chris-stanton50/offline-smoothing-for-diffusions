@@ -12,9 +12,10 @@ If the SDE in question is of dimension one (in both the solution and the driving
 is possible to generate exact simulations from the SDE. These may be implemented here too.  
 """
 
-import particles.distributions as dists
-import sdes.distributions as sdists
+from sdes.tools import method_match_first_dim
 import numpy as np
+import scipy.linalg as sla
+import numpy.linalg as nla
 import scipy.stats as stats
 
 
@@ -27,8 +28,13 @@ class NumericalScheme(object):
 
     @property
     def default_x_start(self):
-        return 0. if self.SDE.isunivariate else np.zeros((1, self.SDE.dimX))
-    
+        if self.SDE.dimX == 1:
+            return 0.
+        if hasattr(self.SDE, 'N'):
+            return np.zeros((self.SDE.N, self.SDE.dimX))
+        else: 
+            return np.zeros((1, self.SDE.dimX))
+
     def _error_msg(self, method):
         return ('method ' + method + ' not implemented in SDE numerical scheme class%s' %
                 self.__class__.__name__)
@@ -36,24 +42,36 @@ class NumericalScheme(object):
     def simulate(self, size, t_start=0., t_end=1., x_start=None, num=5):
         """
         Generates a simulation of sample paths of the SDE using the numerical scheme.
+        
+        For MV case: x_start is a (N, dimX) array,
+                    size = N
+        
         """
-        if self.SDE.dimX > 1 or self.SDE.dimW > 1:
-            raise NotImplementedError('Simulation function yet to be implemented for SDES that are not univariate.')
         x_start = self.default_x_start if x_start is None else x_start
         t_diff = t_end - t_start
-        param_names = self._gen_param_names(t_diff, num)
-        if self.SDE.dimX == 1:
-            dtype = [(param_name, 'float64') for param_name in param_names]
-        else:
-            # This will be needed when extending to higher dimensions
-            dtype = [(param_name, 'float64', self.SDE.dimX) for param_name in param_names]
-        sims = np.empty(size, dtype=dtype)
+        sims = self._create_state_container(t_diff, num, size, dimX=self.SDE.dimX)
+        param_names = sims.dtype.names
         step, first_param = t_diff/num, param_names[0]
-        sims[first_param] = self.univ_simulation_step(size, t_start, x_start, step)
+        sims[first_param] = self.simulation_step(size, t_start, x_start, step)
         for i in range(1, num):
             prev_time, curr_param, prev_param = t_start + i*step, param_names[i], param_names[i-1]
-            sims[curr_param] = self.univ_simulation_step(size, prev_time, sims[prev_param], step)
+            sims[curr_param] = self.simulation_step(size, prev_time, sims[prev_param], step)
         return sims
+    
+    def _create_state_container(self, t_diff, num, size, dimX=1):
+        param_names = self._gen_param_names(t_diff, num)
+        if dimX == 1:
+            dtype = [(param_name, 'float64') for param_name in param_names]
+        else:
+            dtype = [(param_name, 'float64', dimX) for param_name in param_names]
+        state_container = np.empty(size, dtype=dtype)
+        return state_container
+
+    def _state_container_size(self, X: np.ndarray, x_start):
+        X_shape_idx = 1 if X.shape == () else X.shape[0]
+        x_start_shape_idx = 1 if x_start.shape == () else x_start.shape[0]
+        size = max(X_shape_idx, x_start_shape_idx)
+        return size
 
     def _gen_param_names(self, T, num):
         delta = T/num
@@ -68,64 +86,20 @@ class NumericalScheme(object):
             c += 1
         return c
 
-    # @property
-    # def initial_dist(self):
-    #     return self.univ_initial_dist if self.SDE.isunivariate else self.mv_initial_dist
-    
-    # @property
-    # def transition_dist(self):
-    #     return self.univ_transition_dist if self.SDE.isunivariate else self.mv_transition_dist
+class MvNumericalScheme(NumericalScheme):
 
-    # Distribution functionality currently not being used.
-
-    # def univ_initial_dist(self, t, x, step):
-    #     """
-    #     This method expects input x to be a scalar for x
-    #     """
-    #     raise NotImplementedError(self._error_msg('univ_initial_dist'))
-
-    # def mv_initial_dist(self, t, x, step):
-    #     """
-    #     This method expects input x to be an ndarray of shape (1, dimX) for x
-    #     """
-    #     raise NotImplementedError(self._error_msg('mv_initial_dist'))
-
-    # def univ_transition_dist(self, t, x, step):
-    #     """
-    #     This method expects input ndarray of shape (N,) for x
-    #     """
-    #     raise NotImplementedError(self._error_msg('univ_transition_dist'))
-    
-    # def mv_transition_dist(self, t, x, step):
-    #     """
-    #     This method expects input ndarray of shape (N, dimX) for x
-    #     """
-    #     raise NotImplementedError(self._error_msg('mv_transition_dist'))
-    
-    # def distribution(self, t_start=0., t_end=1., x_start=None, num=5):
-    #     """
-    #     Creates a distribution object that represents the joint distribution 
-    #     of the SDE at regular time intervals.
-    #     """
-    #     x_start = self.default_x_start if x_start is None else x_start
-    #     t_diff = t_end - t_start
-    #     param_names = self._gen_param_names(t_diff, num)
-    #     law_dict, step, first_param = {}, t_diff/num, param_names[0]
-    #     law_dict[first_param] = self.initial_dist(t_start, x_start, step)
-    #     for i in range(1, num):
-    #         prev_time, curr_param, prev_param = t_start + i*step, param_names[i], param_names[i-1]
-    #         cond_law_fn = self._cond_law_fn_builder(prev_time, prev_param, step)
-    #         law_dict[curr_param] = dists.Cond(cond_law_fn, dim=self.SDE.dimX)
-    #     return dists.StructDist(law_dict)
-
-    # def _cond_law_fn_builder(self, prev_time, label, step):
-    #     def cond_law_fn(x):
-    #             return self.transition_dist(prev_time, x[label], step)
-    #     return cond_law_fn
+    def mv_state_container_size(X: np.ndarray, x_start):
+        """ May need to change this later"""
+        return max(X.shape[0], x_start.shape[0])
 
 class EulerMaruyama(NumericalScheme):
 
-    def univ_simulation_step(self, size, t, x, step):
+    def __init__(self, SDE):
+        if SDE.dimX != SDE.dimW:
+            raise ValueError('SDE must be elliptic (dimX = dimW) for Euler-Maruyama scheme')
+        super().__init__(SDE)
+
+    def simulation_step(self, size, t, x, step):
         """
         Given starting point(s) 'x' and a time 't', uses the Euler-Maruyama scheme
         to simulate the SDE at time 't+step':
@@ -149,13 +123,24 @@ class EulerMaruyama(NumericalScheme):
         Z = stats.norm.rvs(size=size)
         x_step = x + self.SDE.b(t, x)*step + self.SDE.sigma(t, x) * np.sqrt(step) * Z
         return x_step
-    
+        
     def transform_X_to_W(self, X, t_start=0., x_start=0., transform_end_point=True):
         """
-        A discretised transform from a structured array of solutions to the SDE, to the Brownian motion.
+        Use cases:
+
+        For forward method, reparameterised fk models, transforms the X process into Brownian noise.
+
+        X: ND struct array of different paths (or could stack the input and feed it like this)
+        t_start: 0.
+        x_start: (N, ) (dimX=1) / (N, dimX) (dimX > 1) array of end points of paths from particles from previous timestep
+        transform_end_point: False 
         """
-        W = np.empty_like(X); t_s = X.dtype.names; delta_t = float(t_s[0]); curr_t = t_start
-        W[t_s[0]] = self._X_to_W_step(curr_t, np.zeros_like([X[t_s[0]]]), x_start, X[t_s[0]], delta_t)
+        t_s = X.dtype.names; 
+        num, delta_t, t_end = len(t_s), float(t_s[0]), float(t_s[-1])
+        t_diff, curr_t = t_end - t_start, t_start        
+        size = self._state_container_size(X, x_start)
+        W = self._create_state_container(t_diff, num, size, dimX=self.SDE.dimW)
+        W[t_s[0]] = self._X_to_W_step(curr_t, np.zeros(X[t_s[0]].shape), x_start, X[t_s[0]], delta_t)
         for i in range(1, len(t_s) - 1):
             curr_t += delta_t
             W[t_s[i]] = self._X_to_W_step(curr_t, W[t_s[i-1]], X[t_s[i-1]], X[t_s[i]], delta_t)
@@ -165,14 +150,41 @@ class EulerMaruyama(NumericalScheme):
         else:
             W[t_s[-1]] = X[t_s[-1]]        
         return W
-    
+        
     def transform_W_to_X(self, W, t_start=0., x_start=0., transform_end_point=True):
         """
         An discretised transform from the simulation of a Brownian motion to the solution of the SDE:
+        We can change the initialisation so we don't have to stack the 1D struct array.
+
+        Use cases:
+        Transforming noise to aux bridge in backward sampling algos:
+
+        W: 1D struct array of a single path (or could stack the input and feed it like this)
+        t_start: 0.
+        x_start: (N, ) array of end points of paths from particles from previous timestep
+        transform_end_point: False
+
+        Evaluating potentials G_t in reparameterised fk models:
+
+        W: ND struct array of different paths (or could stack the input and feed it like this)
+        t_start: 0.
+        x_start: (N, ) array of end points of paths from particles from previous timestep
+        transform_end_point: False
+        
+        Evaluating unnormalised density of theta for MWG updates within Particle Gibbs:
+
+        W: (1, ) struct array of different paths
+        t_start: 0.
+        x_start: (1, ) array of end points of paths from particles from previous timestep
+        transform_end_point: False  
         """
-        t_s = W.dtype.names; delta_t = float(t_s[0]); curr_t = t_start
-        X = np.empty_like(W); x_end = W[t_s[-1]]
-        X[t_s[0]] = self._W_to_X_step(curr_t, x_start, np.zeros_like(W[t_s[0]]), W[t_s[0]], delta_t)
+        t_s = W.dtype.names
+        num, delta_t, t_end = len(t_s), float(t_s[0]), float(t_s[-1])
+        t_diff, curr_t = t_end - t_start, t_start
+        size = self._state_container_size(W, x_start)
+        X = self._create_state_container(t_diff, num, size, dimX=self.SDE.dimX)
+        x_end = W[t_s[-1]]
+        X[t_s[0]] = self._W_to_X_step(curr_t, x_start, 0., W[t_s[0]], delta_t)
         for i in range(1, len(t_s) - 1):
             curr_t += delta_t
             X[t_s[i]] = self._W_to_X_step(curr_t, X[t_s[i-1]], W[t_s[i-1]], W[t_s[i]], delta_t)
@@ -180,9 +192,9 @@ class EulerMaruyama(NumericalScheme):
             curr_t += delta_t
             X[t_s[-1]] = self._W_to_X_step(curr_t, X[t_s[-2]], W[t_s[-2]], W[t_s[-1]], delta_t)
         else:
-            X[t_s[-1]] = x_end
+            X[t_s[-1]] = x_end*np.ones(size) if type(x_end) == float else x_end
         return X
-
+    
     def _W_to_X_step(self, t, x, w, w_next, step):
         """       
         """  
@@ -194,51 +206,12 @@ class EulerMaruyama(NumericalScheme):
         """
         w_next = w + ((x_next - x) - self.SDE.b(t, x)*step)/self.SDE.sigma(t, x)
         return w_next
-
-    # def _cond_loc(self, t, x, step):
-    #     return x + self.SDE.b(t, x) * step
-
-    # def _cond_cov(self, t, x, step):
-    #     return self.SDE.Cov(t, x) * step
-
-    # def univ_initial_dist(self, t, x, step):
-    #     return self.univ_transition_dist(t, x, step)
     
-    # def univ_transition_dist(self, t, x, step):
-    #     trans_loc = self._cond_loc(t, x, step)
-    #     trans_scale = np.sqrt(self._cond_cov(t, x, step))
-    #     return dists.Normal(loc=trans_loc, scale=trans_scale)
-
-    # def mv_initial_dist(self, t, x, step): # Expected Input of 'x' is (1, dimX)
-    #     """
-    #     """
-    #     trans_loc = self._cond_loc(t, x, step)
-    #     trans_cov = self._cond_cov(t, x, step)
-    #     return dists.MvNormal(loc=trans_loc, cov=trans_cov)
-    
-    # def mv_transition_dist(self, t, x, step): # Expected Input of 'x' is (N, dimX)
-    #     """
-    #     Note: when 'MvNormal' class is instantiated, the covariance matrix fed in
-    #     is Cholesky factorised. This will add extra compute cost. This could be 
-    #     corrected in the future, but leave it for now.
-
-    #     The correction will involve redefining the '__init__' method of
-    #     the MvNormal class, so that the square root matrix is taken as
-    #     an input instead of the covariance matrix.
-    #     """
-    #     if x.shape[0] == 1: # This would occur when we are only simulating one particle, so covariance does not vary.
-    #         return self.mv_initial_dist(t, x, step)
-    #     else:
-    #         trans_loc = self._cond_loc(t, x, step) # This should be fine: we would expect this to naturally map from (N, dimX) to (N, dimX)
-    #         apply_fn = lambda y: self._cond_cov(t, y.reshape((1, self.SDE.dimX)), step)
-    #         trans_cov = np.apply_along_axis(apply_fn, 1, x)  # These lines ensure that each (1, dimX) vector is input seperately.
-    #         return sdists.VaryingCovNormal(loc=trans_loc, cov=trans_cov)
-
 class Milstein(NumericalScheme):
     """
     The Milstein scheme. Usage requires that the first derivative of the diffusion coefficient: dsigma has been defined.
     """
-    def univ_simulation_step(self, size, t, x, step):
+    def simulation_step(self, size, t, x, step):
         """
         Simulation step for the Milstein scheme (Kloeden & Platen 1990), p345.        
         """
@@ -253,12 +226,92 @@ class LinearExact(NumericalScheme):
     """
     Exact simulation from a linear SDE.
     """
-    def univ_simulation_step(self, size, t, x, step):
+    def simulation_step(self, size, t, x, step):
         Z = stats.norm.rvs(size=size)
         loc = self.SDE._a(t, t+step)* x + self.SDE._b(t, t+step)
         scale = np.sqrt(self.SDE._v(t, t+step))
         x_step = loc + scale * Z
         return x_step    
+
+class MvEulerMaruyama(EulerMaruyama, MvNumericalScheme):
+    
+    def simulation_step(self, size, t, x, step):
+        """
+        Given starting point(s) 'x' and a time 't', uses the Euler-Maruyama scheme
+        to simulate the SDE at time 't+step':
+
+        This is a *critical* function. This will be called multiple times in any SMC
+        algorithm, so speeding this up could have significant impacts on algorithm performance.
+        
+        Inputs
+        -------------
+        size (int): The number of SDE paths.
+        t (float): The current time 
+        x (np.ndarray): A (size, dimX) array for the current point on the SDE.
+        step (float): The step size
+
+        Returns
+        -------------
+        x_step (np.ndarray): An array of shape (size, dimX) for the SDE paths at time t+step
+        """
+        # Compute drift and diffusion
+        drift = self.SDE.b(t, x)  # shape (N, d)
+        diffusion = self.SDE.sigma(t, x)  # shape (n_sim, d, m)
+        # Generate Brownian increments
+        dW = np.sqrt(step) * stats.norm.rvs(size=(size, self.SDE.dimW))
+        # Euler-Maruyama update
+        x_step = x + drift * step + np.einsum('ijk,ik->ij', diffusion, dW)
+        return x_step
+
+    @method_match_first_dim
+    def _W_to_X_step(self, t, x, w, w_next, step):
+        """       
+        """
+        drift = self.SDE.b(t, x) # shape (1/N, d)
+        diffusion = self.SDE.sigma(t, x) # shape (1/N, d, d)  
+        x_next =  x + drift*step + np.einsum('ijk,ik->ij', diffusion, w_next - w)
+        return x_next
+
+    @method_match_first_dim
+    def _X_to_W_step(self, t, w, x, x_next, step):
+        """
+        """
+        drift = self.SDE.b(t, x) # shape (1/N, d)
+        diffusion = self.SDE.sigma(t, x) # shape (1/N, d, d)  
+        # inv_diff = nla.inv(diffusion) # Talk to Alex about this: this is unstable!
+        # w_next = w + np.einsum('ijk,ik->ij', inv_diff, ((x_next - x) - drift*step))
+        w_next = w + nla.solve(diffusion, ((x_next - x) - drift*step))
+        return w_next
+        
+class MvLinearExact(MvNumericalScheme):
+    
+    def simulation_step(self, size, t, x, step):
+        """
+        Inputs: 
+        ---------
+        size: int, number of particles
+        t: float, current time
+        x: np.ndarray, (size, dimX)/(1, dimX), current state
+        step: float, step size
+        
+        Returns:
+        --------
+        x_step: np.ndarray, (size, dimX), next state
+        """
+        N = self.SDE.N
+        if size != N and N != 1:
+            raise ValueError('size must be equal to the number of particles')
+        if x.shape[0] == 1 and N == 1:
+            x = np.concatenate([x]*size, axis=0)
+        a = self.SDE._a(t, t+step); b = self.SDE._b(t, t+step); v = self.SDE._v(t, t+step)
+        _a = a if N > 1 else np.concatenate([a]*size) # (size, dimX, dimX)
+        _b = b if N > 1 else np.concatenate([b]*size) # (size, dimX)
+        _v = v if N > 1 else np.concatenate([v]*size) # (size, dimX, dimX)
+        Z = stats.norm.rvs(size=(size, self.SDE.dimX))
+        loc = np.einsum('ijk,ik->ij', _a, x) + _b # (size, dimX)
+        scale = sla.cholesky(_v, lower=True) # (size, dimX, dimX)
+        x_step = loc + np.einsum('ijk,ik->ij', scale, Z) # (N, dimX)
+        return x_step
 
 """
 If we consider univariate SDEs only, one can immediately define the Milstein scheme and simulate from it by going through the derivations
