@@ -1,5 +1,33 @@
+#------------------------------------------------------------------------------------------------
+# We might want to change some of these ones:
+
+# Scripts: ignore for now, but change this in the future when you have decided what to keep in this folder.
+/scripts/
+
+# Deprecated notebooks
+/notebooks/deprecated
+/notebooks/mv_process_tests/deprecated
+
+# Deprecated Documents
+/docs/deprecated
+
+# Univariate OU process tests
+/notebooks/univ_process_tests
+
+# Results
+/scripts/results
+
+# Hypothesis testing notebook for Paola
+/notebooks/hypothesis_testing.ipynb
+
+#------------------------------------------------------------------------------------------------
+# Files that we would never need 
+
+# DS_store files
+.DS_Store
+#VS-Code configuration
+/.vscode
 # PyCache
 *.pyc
 #ipynb checkpoints
 /notebooks/.ipynb_checkpoints
-/notebooks/deprecated
