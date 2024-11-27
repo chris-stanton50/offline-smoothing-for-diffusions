@@ -4,6 +4,42 @@ The purpose of this repo is to contain the implementation of PMCMC methods appli
 
 We begin by considering the case of a standard Ito SDE without jumps, and then extend to the case where the SDE has jumps.
 
+
+## Setup Instructions
+
+### venv
+
+Reproducibility for this repo is managed through a virtual environment. After the cloning the repository, build the virtual environemnt locally through the following commands:
+
+(Ensuring that `python` refers to Python 3.11.10 (if not, on Mac brew install python3.11, then use `python3.11` instead)), inside the directory of the cloned repository: 
+
+- Make a folder for the venv: `mkdir venv` (the folder venv is already in the `.gitignore` file)
+- Create the venv `python -m venv ./venv/diffusions`
+- Activate the venv by sourcing the activate script: `source ./venv/diffusions/bin/activate`
+- Upgrade pip in your virtual environment `pip install --upgrade pip`
+- Install all dependencies in the venv `pip install -r requirements.txt`
+
+All of the above steps can be run by sourcing the `build_venv.sh` script.
+
+To delete the created virtual environment, simply decactivate it then recursively delete the folder in which the packages were created.
+
+`rm -rf venv`
+
+### Add repo to the Python path
+
+Currently, the repo has not been made into a package using a wheel file. So, after cloning the repository, the location of the repository needs to be added to the python path to import modules from the project:
+To do this, run the following shell command in the terminal, or add the following line to the `.zshrc/.bashrc` file:
+
+ `export PYTHONPATH=$PYTHONPATH:~/location/of/cloned_repository/offline-smoothing-for-diffusions/`
+
+You are now ready to use the package. Ensure that you have the created `diffusions` virtual environment activated when trying to use the package. It can be activated with the following command from the home directory:
+
+`source ./venv/diffusions/bin/activate`
+
+You could alias this for faster activation with the command:
+
+`alias activate_diffusions="source ~/path/from/home/to_repository/offline-smoothing-for-diffusions/venv/diffusions/bin/activate"`
+
 ## Implementation
 
 The trick of using the result shown by Delyon and Hu (2006) results in a Feynman-Kac model for the posterior distribution of the latent process. Thus, it is possible to apply any SMC filtering and/or smoothing method to conduct inference in this class of models. For joint smoothing, the state of the art offline approaches are those that combine SMC and MCMC: namely Particle MCMC methods. The state of the art online approach is SMC^2. For implementing these methods, it makes sense to extend the `particles` package that accompanies the book [An Introduction to Sequential Monte Carlo](https://nchopin.github.io/books/). The package contains an abstraction of State Space models and Feynman Kac models. Once the models of interest (i.e SDES observed with noise)have been expressed in this form, through the package a whole host of MCMC/PMCMC methods can be implemented. It will be necessary to either ask N Chopin to extend the package to contain PGBS/PGAS sampling methods, or to do this yourself.

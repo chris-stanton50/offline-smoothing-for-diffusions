@@ -4,6 +4,9 @@
 # Scripts: ignore for now, but change this in the future when you have decided what to keep in this folder.
 /scripts/
 
+# venv
+/venv/
+
 # Deprecated notebooks
 /notebooks/deprecated
 /notebooks/mv_process_tests/deprecated

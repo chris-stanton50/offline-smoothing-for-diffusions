@@ -1,4 +1,11 @@
-particles==0.3alpha
+particles==0.4
 numpy==1.24.3
 scipy==1.10.1
+jupyterlab==4.2.3
 matplotlib==3.7.1
+seaborn==0.12.2
+arviz==0.15.1
+dill==0.3.8
+
+# This command gives permission denied currently, as you don't have permission on the remote.
+# scp -r ./offline-smoothing-for-diffusions merida:/home/chris/ 
