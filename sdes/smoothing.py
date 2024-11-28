@@ -1,9 +1,33 @@
 import numpy as np
 import time
+import types
 
 from particles.core import SMC
+import particles.resampling as rs
 
 from sdes.feynman_kac import CDSSM_FeynmanKac, CDSSM_SMC
+
+# method for a ParticleHistory object: generates samples by tracing back the ancestral path.
+# We bind this to the ParticleHistory class, so that we can call it as a method.
+
+def backward_sampling_geneaology(self, M):
+    """
+    Extract M full trajectories from the particle history.
+
+    M final states are chosen randomly, then the corresponding trajectory
+    is constructed backwards, until time t=0.
+    """
+    idx = self._init_backward_sampling(M)
+    for t in reversed(range(self.T - 1)):
+        idx[t, :] = self.A[t + 1][idx[t + 1, :]]
+    return self._output_backward_sampling(idx)
+
+method_dict = {"geneaology": 'backward_sampling_geneaology',
+               "FFBS_ON2": 'backward_sampling_ON2',
+               "FFBS_purereject": 'backward_sampling_reject',
+               "FFBS_hybrid": 'backward_sampling_reject',
+               "FFBS_MCMC": 'backward_sampling_mcmc'
+               }
 
 def modif_smoothing_worker(
     method=None, N=100, fk=None, num=10, smc_cls=CDSSM_SMC, add_funcs=None):
@@ -16,7 +40,7 @@ def modif_smoothing_worker(
     Parameters
     ----------
     method : string
-         ['FFBS_purereject', 'FFBS_hybrid', FFBS_MCMC', 'FFBS_ON2']
+         ['geneaology', 'FFBS_purereject', 'FFBS_hybrid', FFBS_MCMC', 'FFBS_ON2']
     N : int
         number of particles
     fk : Feynman-Kac object
@@ -55,16 +79,14 @@ def modif_smoothing_worker(
     print(f'Running fk model: {fk_string}')
     tic = time.perf_counter()
     pf.run()
-    if method.startswith("FFBS"):
-        submethod = method.split("_")[-1]
-        if submethod == "ON2":
-            z = pf.hist.backward_sampling_ON2(N)
-        elif submethod == "MCMC":
-            z = pf.hist.backward_sampling_mcmc(N)
-        elif submethod == "hybrid":
-            z = pf.hist.backward_sampling_reject(N)
-        elif submethod == "purereject":
-            z = pf.hist.backward_sampling_reject(N, max_trials=N * 10 ** 9)
+    # Bind the backward sampling geneaology method to the ParticleHistory object
+    pf.hist.backward_sampling_geneaology = types.MethodType(backward_sampling_geneaology, pf.hist)
+    if method in method_dict.keys():
+        bound_smoothing_method = getattr(pf.hist, method_dict[method])
+        if method == "FFBS_purereject":
+            z = bound_smoothing_method(N, max_trials=N * 10 ** 9)
+        else:
+            z = bound_smoothing_method(N)
         # Once we have the backward samples, we can post-process them however we want!
         # Don't feel restricted here!
         for add_func_name, add_func in add_funcs.items(): 

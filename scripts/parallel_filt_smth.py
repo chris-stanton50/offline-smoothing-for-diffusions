@@ -31,7 +31,7 @@ objective = objectives_map[short_objective]
 # objective = 'smoothing'
 # smoothing=True
 # File storage index
-i = 2
+i = 10
 #------------------------------------------------------------------------------------------
 # DEFINE ALL VARIABLES HERE
 # Model Parameters
@@ -106,13 +106,17 @@ bench_cdssm_smth_methods = ['FFBS_MCMC']
 #--------------------------------------------------
 
 # Multi SMC/CDSSM SMC parameters
+
+# FK models that for the basis of the cdssm
+# If set to None, then all FK models are used.
+fk_names = ['BsR_DH', 'BwR_OU_OUP', 'BwR_DH_OUP', 'BwR_DH_IOUP', 'FwR_DH_OUP', 'FwR_DH_DBrP', 'FwR_DH_NDBBrP']
+
 # these are used both for filtering and online-smoothing
 N_filt=[100]; num_filt=[10]; nruns_filt=10
 
 # (Offline) Smoothing parameters
 N_smth=[100]; num_smth=[10]; nruns_smth=10
-methods = ['FFBS_MCMC']
-
+methods = ['geneaology', 'FFBS_ON2', 'FFBS_MCMC']
 
 # Additive functions to store and methods to use for online smoothing
 add_funcs = default_add_funcs
@@ -192,7 +196,7 @@ def get_smc_options(cd=False, benchmark=False):
             fk_model.add_funcs = default_add_funcs
     elif not benchmark and cd:
         smc_options = multi_cdssm_smc_options if objective != 'smoothing' else multi_cdssm_smoothing_options
-        fk_models = sfk.gen_all_fk_models(cdssm, y, smoothing=smoothing)
+        fk_models = sfk.gen_fk_models(cdssm, y, smoothing=smoothing, fk_names=fk_names)
     elif benchmark and not cd:
         smc_options = bench_multi_smc_opts if objective=='filtering' else bench_multiplexer_options
         fk_models = {bench_ssm_fk_cls.__name__: bench_ssm_fk_cls(ssm=discrete_ssm, data=y)}

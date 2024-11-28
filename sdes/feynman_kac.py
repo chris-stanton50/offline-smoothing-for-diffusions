@@ -656,6 +656,17 @@ def _gen_fk_models_rec(fk_models, options_dicts, curr_fk_cls, curr_fk_name, curr
     options_dicts[name] = options_dict
     return fk_models
 
+def gen_fk_models(cdssm, data, smoothing=False, fk_names=None):
+    """
+    Constructs a selection of fk models given an instance of 
+    CDSSM and a dataset.  
+    """
+    all_fk_models = gen_all_fk_models(cdssm, data, smoothing=smoothing)
+    if fk_names is None:
+        return all_fk_models
+    else:
+        return {name: all_fk_models[name] for name in fk_names}
+
 class _picklable_f:
 
     def __init__(self, fun):
