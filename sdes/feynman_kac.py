@@ -151,8 +151,12 @@ class BootstrapDA(CDSSM_FeynmanKac):
 
     """    
     
-    sname = 'BootstrapDA'
-     
+    cls_sname = 'BootstrapDA'
+    
+    @property
+    def sname(self):
+        return self.cls_sname
+
     @property
     def T(self):
         return 0 if self.data is None else len(self.data)
@@ -180,11 +184,17 @@ class BootstrapDA(CDSSM_FeynmanKac):
 
 class BootstrapReparameterisedDA(BootstrapDA):
 
-    sname = 'BsR'
+    cls_sname = 'BsR'
     
     def __init__(self, cdssm=None, data=None, auxiliary_bridge_cls = None):
         super().__init__(cdssm=cdssm, data=data)
         self.auxiliary_bridge_cls = self.default_auxiliary_bridge_cls if auxiliary_bridge_cls is None else auxiliary_bridge_cls
+
+    @property
+    def sname(self):
+        name = self.cls_sname
+        bridge_ext = self.auxiliary_bridge_cls.sname if self.dimX == 1 else self.auxiliary_bridge_cls.sname[2:]
+        return name + '_' + bridge_ext
 
     @classmethod
     def auxiliary_bridge_cls_options(cls):
@@ -291,12 +301,18 @@ class ForwardGuidedDA(BootstrapDA):
         ProposalSDECls = LocalLinearOUProp
 
     """
-    sname = 'FwG'
+    cls_sname = 'FwG'
     
     def __init__(self, cdssm=None, data=None, proposal_sde_cls=None):
         super().__init__(cdssm=cdssm, data=data)
         self.proposal_sde_cls = self.default_proposal_sde_cls if proposal_sde_cls is None else proposal_sde_cls
-        
+
+    @property
+    def sname(self):
+        name = self.cls_sname
+        fw_prop_ext = self.proposal_sde_cls.sname if self.dimX == 1 else self.proposal_sde_cls.sname[2:]
+        return name + '_' + fw_prop_ext
+    
     @classmethod
     def proposal_sde_cls_options(cls):
         return {**cls.univ_proposal_sde_cls_options(), **cls.mv_proposal_sde_cls_options()}
@@ -344,12 +360,19 @@ class BackwardGuidedDA(BootstrapDA):
     can use the `euler_proposal_dist` when the model SDE is a general SDE.
     """
 
-    sname = 'BwG'
+    cls_sname = 'BwG'
     
     def __init__(self, cdssm=None, data=None, end_pt_proposal_sde_cls=None, auxiliary_bridge_cls=None):
         super().__init__(cdssm=cdssm, data=data)
         self.end_pt_proposal_sde_cls = self.default_end_pt_proposal_sde_cls if end_pt_proposal_sde_cls is None else end_pt_proposal_sde_cls
         self.auxiliary_bridge_cls = self.default_auxiliary_bridge_cls if auxiliary_bridge_cls is None else auxiliary_bridge_cls
+
+    @property
+    def sname(self):
+        name = self.cls_sname
+        bridge_ext = self.auxiliary_bridge_cls.sname if self.dimX == 1 else self.auxiliary_bridge_cls.sname[2:]
+        end_pt_prop_ext = self.end_pt_proposal_sde_cls.sname if self.dimX == 1 else self.end_pt_proposal_sde_cls.sname[2:]
+        return name + '_' + bridge_ext + '_' + end_pt_prop_ext
 
     @classmethod
     def end_pt_proposal_sde_cls_options(cls):
@@ -428,11 +451,19 @@ class ForwardReparameterisedDA(ForwardGuidedDA, BootstrapReparameterisedDA):
         It will be interesting to consider the impact of different auxiliary bridge constructions on algorithm performance.
     """
     
-    sname = 'FwR'
+    cls_sname = 'FwR'
     
     def __init__(self, cdssm=None, data=None, proposal_sde_cls=None, auxiliary_bridge_cls=None):
         ForwardGuidedDA.__init__(self, cdssm=cdssm, data=data, proposal_sde_cls=proposal_sde_cls)
         self.auxiliary_bridge_cls = self.default_auxiliary_bridge_cls if auxiliary_bridge_cls is None else auxiliary_bridge_cls
+
+    @property
+    def sname(self):
+        name = self.cls_sname
+        bridge_ext = self.auxiliary_bridge_cls.sname if self.dimX == 1 else self.auxiliary_bridge_cls.sname[2:]
+        fw_prop_ext = self.proposal_sde_cls.sname if self.dimX == 1 else self.proposal_sde_cls.sname[2:]
+        return name + '_' + bridge_ext + '_' + fw_prop_ext
+
 
     def M0(self, N):
         self.proposal_sde = self.proposal_sde_cls(self.model_sde, self.cdssm.s(0), self.cdssm.s(1), self.data[0], self.cdssm.LY(0), self.cdssm.sigmaY(0))
@@ -519,12 +550,19 @@ class ForwardReparameterisedDA(ForwardGuidedDA, BootstrapReparameterisedDA):
 class BackwardReparameterisedDA(BackwardGuidedDA, BootstrapReparameterisedDA):
     """For backward, reparameterised DA, the same auxiliary bridge process is used for the transform as in the proposal"""
 
-    sname = 'BwR'
+    cls_sname = 'BwR'
     
     def __init__(self, cdssm=None, data=None, end_pt_proposal_sde_cls=None, auxiliary_bridge_cls=None):
         super().__init__(cdssm=cdssm, data=data, end_pt_proposal_sde_cls=end_pt_proposal_sde_cls, auxiliary_bridge_cls=auxiliary_bridge_cls)
         self.brownian_motion = MvIndepBrownianMotion(dimX=self.dimX) if self.dimX > 1 else BrownianMotion()
-    
+
+    @property
+    def sname(self):
+        name = self.cls_sname
+        bridge_ext = self.auxiliary_bridge_cls.sname if self.dimX == 1 else self.auxiliary_bridge_cls.sname[2:]
+        end_pt_prop_ext = self.end_pt_proposal_sde_cls.sname if self.dimX == 1 else self.end_pt_proposal_sde_cls.sname[2:]
+        return name + '_' + bridge_ext + '_' + end_pt_prop_ext
+
     def M0(self, N):
         end_point_proposal_dist = self._end_point_proposal_dist(0., self.cdssm.x0)
         end_points = end_point_proposal_dist.rvs(N)        
@@ -600,7 +638,7 @@ def gen_all_fk_models(cdssm, data, smoothing=False):
         options_dicts =  {name: getattr(fk_cls, univ_or_mv + name + '_options')() 
                         for name in proposal_kwarg_names if hasattr(fk_cls, name + '_options')}
         fk_kwargs = {'cdssm': cdssm, 'data': data}
-        fk_models = _gen_fk_models_rec(fk_models, options_dicts, fk_cls, fk_cls.sname, fk_kwargs)
+        fk_models = _gen_fk_models_rec(fk_models, options_dicts, fk_cls, fk_cls.cls_sname, fk_kwargs)
         all_fk_models.update(fk_models)
     return all_fk_models
         
@@ -628,20 +666,6 @@ class _picklable_f:
         pf = smc_cls(**kwargs)
         pf.run()
         return self.fun(pf)
-
-    def get_name(pf):
-        name = pf.fk.sname
-        if pf.fk.sname in ['BsR', 'FwR', 'BwR', 'BwG']:
-            name_ext = pf.fk.auxiliary_bridge_cls.sname if pf.fk.cdssm.dimX == 1 else pf.fk.auxiliary_bridge_cls.sname[2:]
-            name += f'_{name_ext}'
-        if pf.fk.sname in ['FwG', 'FwR']:
-            name_ext = pf.fk.proposal_sde_cls.sname if pf.fk.cdssm.dimX == 1 else pf.fk.proposal_sde_cls.sname[2:]
-            name += f'_{name_ext}'
-        if pf.fk.sname in ['BwG', 'BwR']:
-            name_ext = pf.fk.end_pt_proposal_sde_cls.sname if pf.fk.cdssm.dimX == 1 else pf.fk.end_pt_proposal_sde_cls.sname[2:]
-            name += f'_{name_ext}'
-        return name
-    
             
 @_picklable_f
 def _identity(x):
@@ -654,24 +678,9 @@ def get_col(pf):
             return col
     return None
 
-def get_name(pf):
-    if not isinstance(pf, CDSSM_SMC):
-        return pf.fk.__class__.__name__
-    name = pf.fk.sname
-    if pf.fk.sname in ['BsR', 'FwR', 'BwR', 'BwG']:
-        name_ext = pf.fk.auxiliary_bridge_cls.sname if pf.fk.cdssm.dimX == 1 else pf.fk.auxiliary_bridge_cls.sname[2:]
-        name += f'_{name_ext}'
-    if pf.fk.sname in ['FwG', 'FwR']:
-        name_ext = pf.fk.proposal_sde_cls.sname if pf.fk.cdssm.dimX == 1 else pf.fk.proposal_sde_cls.sname[2:]
-        name += f'_{name_ext}'
-    if pf.fk.sname in ['BwG', 'BwR']:
-        name_ext = pf.fk.end_pt_proposal_sde_cls.sname if pf.fk.cdssm.dimX == 1 else pf.fk.end_pt_proposal_sde_cls.sname[2:]
-        name += f'_{name_ext}'
-    return name
-
 def print_summary(out_func):
     def dec_out_func(pf):
-        name = get_name(pf)
+        name = pf.fk.__class__.__name__ if not isinstance(pf.fk, CDSSM_FeynmanKac) else pf.fk.sname 
         col = get_col(pf)
         collector = f'with {col.summary_name} collector ' if col else ''
         print(f'Running {pf.__class__.__name__} {name} {collector}with {pf.N} particles took {round(pf.cpu_time,ndigits=4)} seconds')

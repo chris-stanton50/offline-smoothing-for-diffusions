@@ -31,7 +31,7 @@ objective = objectives_map[short_objective]
 # objective = 'smoothing'
 # smoothing=True
 # File storage index
-i = 1
+i = 2
 #------------------------------------------------------------------------------------------
 # DEFINE ALL VARIABLES HERE
 # Model Parameters
@@ -68,7 +68,7 @@ CovY = np.eye(dimY)*eta_sq if dimY > 1 else eta_sq
 obs_params = {'L': L, 'covY': CovY, 'x0': x0, 'delta_s': delta_s}
     
 # Data simulation parameters
-T=100
+T=5
 
 
 # -----------------------------------------------------------------------------------------
@@ -107,10 +107,10 @@ bench_cdssm_smth_methods = ['FFBS_MCMC']
 
 # Multi SMC/CDSSM SMC parameters
 # these are used both for filtering and online-smoothing
-N_filt=[100]; num_filt=[10]; nruns_filt=100
+N_filt=[100]; num_filt=[10]; nruns_filt=10
 
 # (Offline) Smoothing parameters
-N_smth=[100]; num_smth=[10]; nruns_smth=100
+N_smth=[100]; num_smth=[10]; nruns_smth=10
 methods = ['FFBS_MCMC']
 
 

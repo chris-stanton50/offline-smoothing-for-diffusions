@@ -45,11 +45,8 @@ def modif_smoothing_worker(
     & Chopin (2022) for a discussion.
     """
     T = fk.T
-    fk_string = fk.__class__.__name__
+    fk_string = fk.__class__.__name__ if not isinstance(fk, CDSSM_FeynmanKac) else fk.sname
     dimX = fk.cdssm.dimX if isinstance(fk, CDSSM_FeynmanKac) else fk.ssm.cdssm.dimX
-    for attr_name in ["auxiliary_bridge_cls", "end_pt_proposal_sde_cls", "proposal_sde_cls"]:
-        if hasattr(fk, attr_name):
-            fk_string += "_" + getattr(fk, attr_name).__name__
     ests = {add_func_name: np.zeros((T, dimX)) for add_func_name in add_funcs.keys()}
     if smc_cls is CDSSM_SMC:
         pf = CDSSM_SMC(fk=fk, N=N, num=num, store_history=True)
