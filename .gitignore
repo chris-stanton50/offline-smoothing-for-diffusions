@@ -34,3 +34,6 @@
 *.pyc
 #ipynb checkpoints
 /notebooks/.ipynb_checkpoints
+
+# all notebooks that are not added manually
+*.ipynb
