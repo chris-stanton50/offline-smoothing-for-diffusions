@@ -22,6 +22,61 @@ def backward_sampling_geneaology(self, M):
         idx[t, :] = self.A[t + 1][idx[t + 1, :]]
     return self._output_backward_sampling(idx)
 
+def backward_sampling_geneaology_idx(self, M, idx = None):
+    """
+    Extract M full trajectories from the particle history.
+
+    M final states are chosen randomly, then the corresponding trajectory
+    is constructed backwards, until time t=0.
+    """
+    idx = self._init_backward_sampling(M) if idx is None else idx.copy()
+    for t in reversed(range(self.T - 1)):
+        idx[t, :] = self.A[t + 1][idx[t + 1, :]]
+    return idx
+
+def backward_sampling_ON2_idx(self, M, idx=None):
+    """
+    Extract M full trajectories from the particle history.
+
+    M final states are chosen randomly, then the corresponding trajectory
+    is constructed backwards, until time t=0.
+    """
+    idx = self._init_backward_sampling(M) if idx is None else idx.copy()
+    for m in range(M):
+        for t in reversed(range(self.T - 1)):
+            lwm = self.wgts[t].lw + self.fk.logpt(
+                t + 1, self.X[t], self.X[t + 1][idx[t + 1, m]]
+            )
+            idx[t, m] = rs.multinomial_once(rs.exp_and_normalise(lwm))
+    return idx
+
+def backward_sampling_mcmc_idx(self, M, nsteps=1, idx=None):
+    """
+    Extract M full trajectories from the particle history.
+
+    M final states are chosen randomly, then the corresponding trajectory
+    is constructed backwards, until time t=0.
+    """
+    idx = self._init_backward_sampling(M) if idx is None else idx.copy()
+    for t in reversed(range(self.T - 1)):
+        xn = self.X[t + 1][idx[t + 1, :]]
+        idx[t, :] = self.A[t + 1][idx[t + 1, :]]
+        for i in range(nsteps):
+            # IID version, otherwise introduces a bias!
+            prop = rs.multinomial_iid(self.wgts[t].W, M=M)
+            lpr_acc = (self.fk.logpt(t + 1, self.X[t][prop], xn)
+                        - self.fk.logpt(t + 1, self.X[t][idx[t, :]], xn))
+            lu = np.log(np.random.rand(M))
+            idx[t, :] = np.where(lu < lpr_acc, prop, idx[t, :])
+    return idx
+
+def add_hist_methods(hist):
+    hist.backward_sampling_geneaology = types.MethodType(backward_sampling_geneaology, hist)
+    hist.backward_sampling_geneaology_idx = types.MethodType(backward_sampling_geneaology_idx, hist)
+    hist.backward_sampling_ON2_idx = types.MethodType(backward_sampling_ON2_idx, hist)
+    hist.backward_sampling_mcmc_idx = types.MethodType(backward_sampling_mcmc_idx, hist)
+
+
 method_dict = {"geneaology": 'backward_sampling_geneaology',
                "FFBS_ON2": 'backward_sampling_ON2',
                "FFBS_purereject": 'backward_sampling_reject',
